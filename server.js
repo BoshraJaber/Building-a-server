@@ -2,12 +2,14 @@
 const express = require('express');
 const axios = require("axios");
 const { get } = require('http');
-
+const pg = require("pg");
 
 const app = express();
 app.use(express.json());
 require('dotenv').config()
 const PORT = process.env.PORT || 3001;
+console.log(process.env.DATABASE_URL);
+const client = new pg.Client(process.env.DATABASE_URL);
 
 
 // routes
@@ -17,9 +19,55 @@ app.get("/user/:id", handleParams);
 app.post("/userInfo", handleBody);
 app.get("/anime", handleAnime); // using .then().catch()
 app.get("/anime/v2", handleAnimeV2) // using async - await
+app.post("/add", handleAdd);
+app.get("/get", handleGetData);
+app.put("/update/:animeID", handleUpdate);
+app.delete("/delete/:deleteID", handleDelete);
 
 
 // functions
+//http://localhost:3000/add
+function handleAdd(req,res){
+    // const title = req.body.title;
+    // const episodes = req.body.episodes;
+    const {title ,episodes } = req.body;
+    const sql = `INSERT INTO favAnime(title, episodes) VALUES($1, $2) RETURNING * ;`
+    let values = [title, episodes];
+    client.query(sql, values).then((data) => {
+        return res.status(201).json(data.rows[0]);
+    })
+}
+// http://localhost:3000/get
+function handleGetData(req,res){
+    const sql = `SELECT * FROM favAnime;`
+    client.query(sql).then(data => {
+        return res.status(200).json(data.rows);
+    })
+}
+//  http://localhost:3000/update
+function handleUpdate(req,res){
+    console.log("Params",req.params);
+    const {title ,episodes } = req.body;
+    const id = req.params.animeID;
+    const sql = `UPDATE  favAnime SET title=$1, episodes=$2 WHERE id=${id} RETURNING *;`;
+    const values = [title, episodes];
+
+    client.query(sql,values).then(data => {
+        return res.status(200).json(data.rows);
+    })
+
+}
+// http://localhost:3000/delete
+function handleDelete(req, res){
+
+    const id = req.params.deleteID;
+    const sql = `DELETE FROM favAnime WHERE id=${id};`
+
+    client.query(sql).then(() => {
+        return res.status(204).json([]);
+    })
+}
+
 // http://localhost:3000/
 function handleHome(req, res) {
     res.send("Hello World!");
@@ -86,6 +134,8 @@ function Anime(animeInfo) {
     this.episodes = animeInfo.episodes;
 }
 
-app.listen(PORT, () => {
-    console.log(`Example app listening on port ${PORT}`)
-})
+client.connect().then(() =>{
+    app.listen(PORT, () => {
+        console.log(`Example app listening on port ${PORT}`)
+    })    
+});
